@@ -5,8 +5,12 @@ import static org.junit.Assert.assertNull;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 
-import org.json.JSONObject;
+import javax.json.Json;
+import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -14,6 +18,11 @@ import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
 import junitparams.naming.TestCaseName;
 
+/***
+ * 
+ * @author Angus
+ *
+ */
 @RunWith(JUnitParamsRunner.class)
 public class CONCATTest {
 	String firstname;
@@ -22,7 +31,7 @@ public class CONCATTest {
 
 	String expected;
 
-	JSONObject userModel = new JSONObject();
+	JsonObject userModel;
 	
 	public static Collection<Object[]> parametersForTestCONCATRemoveTitles() {
 		return Arrays.asList(
@@ -37,6 +46,19 @@ public class CONCATTest {
 					{ "dame Amy-Ally", "Amy-Ally" },
 					{ "rr dame Amy-Ally", "rr dame Amy-Ally" },
 					{ "DAme dame Amy-Ally", "dame Amy-Ally" },
+					}
+				);
+	}
+	
+	public static Collection<Object[]> parametersForTestCONCATRemoveOtherNameInFirstname() {
+		return Arrays.asList(
+				new Object[][] { 
+					{ "Jon", "Jon" },
+					{ "Jon ", "Jon" },
+					{ "Jon lan", "Jon" },
+					{ "Ludwig re fd c", "Ludwig" },
+					{ "Eli zll !", "Eli" },
+					{ "ó ERRDonald", "ó" },
 					}
 				);
 	}
@@ -103,6 +125,32 @@ public class CONCATTest {
 					}
 				);
 	}
+
+	public static Collection<Object[]> parametersForNoMappingCheck() {
+		HashMap<String, String> userObj1 = new HashMap<String, String>();
+		userObj1.put("firstname", "only firstname");
+
+		HashMap<String, String> userObj2 = new HashMap<String, String>();
+		userObj2.put("surname", "only surname");
+
+		HashMap<String, String> userObj3 = new HashMap<String, String>();
+		userObj3.put("tel", "+44 (0) 1231231234");
+		userObj3.put("address", "London");
+
+		HashMap<String, String> userObj4 = new HashMap<String, String>();
+		userObj4.put("surname", "surname and other information");
+		userObj4.put("tel", "+44 (0) 998877665");
+		userObj4.put("address", "London");
+		
+		return Arrays.asList(
+				new Object[][] { 
+					{ userObj1 },
+					{ userObj2 },
+					{ userObj3 },
+					{ userObj4 }
+					}
+				);
+	}
 	
 	@Test
 	@Parameters(method = "parametersForTestCONCATRemoveTitles")
@@ -110,6 +158,12 @@ public class CONCATTest {
 	public void testCONCATRemoveTitles(String firstname, String expected) {
 		assertEquals(expected, CONCAT.removeTitle(firstname));
 	}
+	
+	@Test
+	@Parameters(method = "parametersForTestCONCATRemoveOtherNameInFirstname")
+    @TestCaseName("firstname: {0}, expected: {1}")
+	public void testCONCATRemoveOtherNameInFirstname(String firstname, String expected) {
+		assertEquals(expected, CONCAT.removeOtherNameInFirstname(firstname));	}
 	
 	@Test
 	@Parameters(method = "parametersForTestCONCATRemovePrefixes")
@@ -129,8 +183,7 @@ public class CONCATTest {
 	@Parameters(method = "parametersForTestCONCATGenCONCAT")
     @TestCaseName("firstname: {0}, surname: {1}, expected: {2}")
 	public void testCONCATGenCONCAT(String firstname, String surname, String expected) {
-		userModel.put("firstname", firstname);
-		userModel.put("surname", surname);
+		userModel = Json.createObjectBuilder().add("firstname", firstname).add("surname", surname).build();
 		assertEquals(expected, CONCAT.genCONCAT(userModel));
 	}
 
@@ -138,8 +191,38 @@ public class CONCATTest {
 	@Parameters(method = "parametersForNullCheck")
     @TestCaseName("firstname: {0}, surname: {1}")
 	public void testCONCATCONNullCheck(String firstname, String surname) {
-		userModel.put("firstname", firstname);
-		userModel.put("surname", surname);
+		JsonObjectBuilder job = Json.createObjectBuilder();
+		if (firstname == null) {
+			job = job.add("firstname", JsonObject.NULL);
+		} else {
+			job = job.add("firstname", firstname);
+		}
+		if (surname == null) {
+			job = job.add("surname", JsonObject.NULL);
+		} else {
+			job = job.add("surname", surname);
+		}
+		userModel = job.build();
 		assertNull(CONCAT.genCONCAT(userModel));
 	}
+	
+	@Test
+	@Parameters(method = "parametersForNoMappingCheck")
+    @TestCaseName("userObj: {0}")
+	public void testCONCATCONNoMappingCheck(HashMap<String, String> map) {
+		JsonObjectBuilder job = Json.createObjectBuilder();
+		for (String key : map.keySet()) {
+			job.add(key, map.get(key));
+		}
+		userModel = job.build();
+		assertNull(CONCAT.genCONCAT(userModel));
+	}
+	
+	@Test
+	public void testCONCATCONNormalMappingCheck() {
+		userModel = Json.createObjectBuilder().add("firstname", "only firstname").add("surname", "only surname")
+									.add("tel", "+44 (0) 1231231234").add("address", "London").build();
+		assertEquals("ONLY#ONLYS", CONCAT.genCONCAT(userModel));
+	}
+
 }

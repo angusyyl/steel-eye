@@ -19,8 +19,8 @@ import org.apache.commons.lang3.StringUtils;
  * and returned. Else a null code may be returned.
  * 
  * Self-defined Assumptions: 1) "firstname" and "surname" in JSON object
- * correspond to first name and surname of an user. 2) Received JSON document is
- * stored in resource directory
+ * correspond to first name and surname of an user. 2) Received JSON document
+ * named "UserObjects.json" is stored in "resource" working directory
  * 
  * @author Angus
  *

@@ -1,15 +1,33 @@
 package com.steeleye.codetest;
 
-import java.util.ArrayList;
-import java.util.List;
-
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import javax.json.Json;
+import javax.json.JsonArray;
+import javax.json.JsonObject;
+import javax.json.JsonReader;
 import org.apache.commons.lang3.StringUtils;
-import org.json.JSONException;
-import org.json.JSONObject;
 
+/***
+ * Requirement Assumptions: A user object is received as a JSON document with
+ * any number of arbitrary field A user object may or may not contain all the
+ * necessary fields required to generate a CONCAT code. If the user object
+ * contains all the fields necessary for the code, the code should be generated
+ * and returned. Else a null code may be returned.
+ * 
+ * Self-defined Assumptions: 1) "firstname" and "surname" in JSON object
+ * correspond to first name and surname of an user. 2) Received JSON document is
+ * stored in resource directory
+ * 
+ * @author Angus
+ *
+ */
 public class CONCAT {
-	List<String> titleList = new ArrayList<String>();
 	static final String titlePatterns = "(?i)^(atty|coach|dame|dr|fr|gov|honorable|madam\\(e\\)|maid|master|miss|monsieur|mr|mrs|ms|mx|ofc|ph\\.d|pres|prof|rev|sir)\\s+";
+	static final String otherNameInFirstnamePattern = "\\s+.*";
 	static final String matchPrefixPatterns = "(?i)^(am|auf dem|auf|aus der|d|da|de l’|de|del|de la|de le|di|do|dos|du|im|la|le|mac|mc|mhac|mhic giolla|mhíc|mic|ni|ní|níc|o|ó|ua|ui|uí|van de|van den|van der|van|vom|von dem|von den|von der|von)\\s+.+";
 	static final String replacePrefixPatterns = "(?i)^(am|auf dem|auf|aus der|d|da|de l’|de|del|de la|de le|di|do|dos|du|im|la|le|mac|mc|mhac|mhic giolla|mhíc|mic|ni|ní|níc|o|ó|ua|ui|uí|van de|van den|van der|van|vom|von dem|von den|von der|von)\\s+";
 	static final String excludedNamePatterns = "(?i).*\\s+(McDonald|MacChrystal|O'Brian|O'Neal).*$";
@@ -36,7 +54,34 @@ public class CONCAT {
 	static final String ZPattern = "\\u0179|\\u017A|\\u017D|\\u017E|\\u017B|\\u017C";
 
 	public static void main(String[] args) {
-		// titleListtitles.split(",")
+		InputStream is = null;
+		JsonReader reader = null;
+
+		try {
+			is = new FileInputStream(new File("resources" + File.separator + "UserObjects.json"));
+
+			reader = Json.createReader(is);
+
+			JsonObject jsonObj = reader.readObject();
+			JsonArray userArray = jsonObj.getJsonArray("users");
+			for (int i = 0; i < userArray.size(); i++) {
+				JsonObject userModel = userArray.getJsonObject(i);
+				System.out.println("CONCAT: " + genCONCAT(userModel));
+			}
+			// System.out.println(userArray.toString());
+
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (Exception e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				is.close();
+				reader.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 
 	/***
@@ -46,16 +91,28 @@ public class CONCAT {
 	 * dr, fr, gov, honorable, madam(e), maid, master, miss, monsieur, mr, mrs, ms,
 	 * mx, ofc, ph.d, pres, prof, rev, sir
 	 * 
-	 * @param name
+	 * @param firstname
 	 * @return
 	 */
-	public static String removeTitle(String name) {
-		String result = name.replaceFirst(titlePatterns, "");
+	public static String removeTitle(String firstname) {
+		String result = firstname.replaceFirst(titlePatterns, "");
 		if (result != null) {
 			return result.trim();
 		} else {
 			return result;
 		}
+	}
+
+	/***
+	 * Retain only the first word in firstname field
+	 * 
+	 * @param firstname
+	 * @return
+	 */
+	public static String removeOtherNameInFirstname(String firstname) {
+		// Pattern p = Pattern.compile(otherNameInFirstnamePattern);
+		// return p.matcher(firstname).replaceAll("");
+		return firstname.replaceAll(otherNameInFirstnamePattern, "");
 	}
 
 	/***
@@ -65,19 +122,19 @@ public class CONCAT {
 	 * Prefixes to surnames that are not included above, or prefixes attached to the
 	 * name, i.e. McDonald, MacChrystal, O'Brian, O'Neal, should not be removed;
 	 * 
-	 * @param name
+	 * @param surname
 	 * @return
 	 */
-	public static String removePrefix(String name) {
-		if (name.matches(matchPrefixPatterns) && !name.matches(excludedNamePatterns)) {
-			String result = name.replaceFirst(replacePrefixPatterns, "");
+	public static String removePrefix(String surname) {
+		if (surname.matches(matchPrefixPatterns) && !surname.matches(excludedNamePatterns)) {
+			String result = surname.replaceFirst(replacePrefixPatterns, "");
 			if (result != null) {
 				return result.trim();
 			} else {
 				return result;
 			}
 		} else {
-			return name;
+			return surname;
 		}
 	}
 
@@ -105,32 +162,41 @@ public class CONCAT {
 	 * @param userModel
 	 * @return
 	 */
-	public static String genCONCAT(JSONObject userModel) {
-		String firstname;
-		String surname;
+	public static String genCONCAT(JsonObject userModel) {
+		String firstname = null;
+		String surname = null;
 
 		try {
-			firstname = (String) userModel.get("firstname");
-			surname = (String) userModel.get("surname");
-		} catch (JSONException e) {
+
+			firstname = userModel.getString("firstname");
+			surname = userModel.getString("surname");
+
+			if (firstname == null || surname == null) {
+				return null;
+			}
+			firstname = firstname.toUpperCase();
+			surname = surname.toUpperCase();
+
+			firstname = removeTitle(firstname);
+			firstname = removeOtherNameInFirstname(firstname);
+			surname = removePrefix(surname);
+
+			firstname = transliteration(firstname);
+			surname = transliteration(surname);
+
+			firstname = StringUtils.rightPad(firstname, 5, "#");
+			surname = StringUtils.rightPad(surname, 5, "#");
+
+			firstname = StringUtils.left(firstname, 5);
+			surname = StringUtils.left(surname, 5);
+
+			return firstname.concat(surname);
+		} catch (ClassCastException cce) {
+			System.out.println(String.format(cce.toString() + " (firstname: %s, surname: %s)", firstname, surname));
+			return null;
+		} catch (NullPointerException npe) {
+			System.out.println("the specified json key name doesn't have any mapping");
 			return null;
 		}
-
-		firstname = firstname.toUpperCase();
-		surname = surname.toUpperCase();
-
-		firstname = removeTitle(firstname);
-		surname = removePrefix(surname);
-
-		firstname = transliteration(firstname);
-		surname = transliteration(surname);
-
-		firstname = StringUtils.rightPad(firstname, 5, "#");
-		surname = StringUtils.rightPad(surname, 5, "#");
-
-		firstname = StringUtils.left(firstname, 5);
-		surname = StringUtils.left(surname, 5);
-
-		return firstname.concat(surname);
 	}
 }
